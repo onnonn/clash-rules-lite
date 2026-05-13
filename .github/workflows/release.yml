@@ -6,22 +6,25 @@ on:
     paths:
       - '*.txt'
       - '.github/workflows/**'
+
+# 1. Add explicitly declared permissions here
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@master
+      # 2. Use @v4 instead of @master to avoid deprecation warnings
+      - uses: actions/checkout@v4
 
+      # 3. Use the default checkout behavior instead of curl to gather local repository files
       - name: Generate rules.txt file
         run: |
-          # 设置环境变量
           echo "RELEASE_NAME=Released on $(date +%Y.%m.%d-%H:%M)" >> $GITHUB_ENV
           echo "TAG_NAME=$(date +%Y%m%d%H%M)" >> $GITHUB_ENV
-          # 下载*rules.txt文件
-          mkdir publish
-          for file in $(find $pwd -name "*rules.txt" | xargs ls -d); do 
-            curl -sSL "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/${file#*./}" > "./publish/${file#*./}"
-          done
+          mkdir -p publish
+          find . -maxdepth 1 -name "*rules.txt" -exec cp {} ./publish/ \;
 
       - name: Release and upload assets
         uses: softprops/action-gh-release@v3
@@ -35,6 +38,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # 4. Fixed the Git push authentication mechanism
       - name: Git push assets to "release" branch
         run: |
           cd publish || exit 1
@@ -44,7 +48,8 @@ jobs:
           git checkout -b release
           git add .
           git commit -m "${{ env.RELEASE_NAME }}"
-          git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+          # Use the GITHUB_TOKEN directly via the URL header block for secure authentication
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
           git push -f origin release
 
       - name: Purge jsdelivr CDN
